@@ -1,163 +1,104 @@
 #include "shell.h"
 
 /**
- * _getenv - Returns the value of a given env variable
- * @var_name: Variable to get value for
- * Return: Env var string or NULL if not found
+ * _strlen - Gets the length of a string
+ * @s: String to measure
+ * Return: String length
  */
-char *_getenv(char *var_name)
+int _strlen(char *s)
 {
-	unsigned int j = 0;
-	unsigned int i = 0;
-	unsigned int name_len = _strlen(var_name);
-	unsigned int found_var = 0;
-	char *ret_val;
-	unsigned int val_len;
-	char **env = environ;
+	unsigned int len = 0;
+	char *temp = s;
 
-	while (*env)
+	while (*temp)
 	{
-		j = 0;
-		while (j < name_len)
-		{
-			if (j == name_len - 1 && var_name[j] == (*env)[j])
-			{
-				found_var = 1;
-				break;
-			}
-			if (var_name[j] != (*env)[j])
-				break;
-			j++;
-		}
-		if (found_var)
-		{
-			val_len = _strlen(*env) - name_len;
-			ret_val = malloc(val_len * sizeof(char));
-			if (!ret_val)
-				return (NULL);
-			while (i < val_len - 1)
-			{
-				ret_val[i] = (*env)[i + name_len + 1];
-				i++;
-			}
-			ret_val[val_len - 1] = '\0';
-			return (ret_val);
-		}
-		env++;
+		len++;
+		temp++;
 	}
-	return (NULL);
+	return (len);
 }
 
 /**
- * built_in_check - Check if command is built in
- * @arg: Command to check
- * Return: 1 if builtin 0 otherwise
+ * _strcat - Concats two strings
+ * @sink: string to concat with
+ * @src: buffer to join
+ * Return: Combined string
  */
-int built_in_check(char *arg)
+char *_strcat(char *sink, char *src)
 {
-	unsigned int i = 0;
-	char *BUILT_IN_LIST[] = {
-		"exit", "env", "setenv", "unsetenv", "cd", "echo", NULL
-	};
+	int i;
+	int j;
 
-	while (BUILT_IN_LIST[i])
+	for (i = 0; sink[i] != '\0'; i++)
+		;
+
+	for (j = 0; src[j] != '\0'; j++, i++)
 	{
-		if (_strcmp(BUILT_IN_LIST[i], arg))
-			return (1);
-		i++;
+		sink[i] = src[j];
 	}
-	return (0);
+
+	sink[i] = '\0';
+	return (sink);
 }
 
 /**
- * handle_path - Returns valid path and exits if invalid path
- * @bfr: Buffer containing command or path passed to shell
- * Return: Valid path, NULL if command not found or path not valid
+ * _strcpy - copies a string from one buffer to the other
+ * @sink: Sink buffer
+ * @src: Source buffer
+ * Return: pointer to sink
  */
-char *handle_path(char *bfr)
+char *_strcpy(char *sink, char *src)
 {
-	char *exec_path;
-	char *path_var = _getenv("PATH");
-	char **path_vals = _strtok(path_var, ":");
+	int i;
 
-	if (_strincludes(bfr, '/') == 0)
-	{
-		while (*path_vals)
-		{
-			exec_path = _pathconcat(*path_vals, '/', bfr);
-			if (access(exec_path, X_OK) == 0)
-			{
-				return (exec_path);
-			}
-			path_vals++;
-		}
-		_putstr("Invalid command or path\n", 2);
-		return (NULL);
-	}
-	else
-	{
-		if (access(bfr, X_OK) == 0)
-		{
-			return (bfr);
-		}
-		_putstr("Invalid command or path\n", 2);
-		return (NULL);
-	}
+	for (i = 0; src[i] != '\0'; i++)
+		sink[i] = src[i];
+
+	sink[i] = '\0';
+	return (sink);
 }
 
 /**
- * handle_built_in - Handles commands that are built in
- * @argv: An array of strings
- * Return: Void
+ * _strcmp - compares two strings
+ * @first_str: First string
+ * @sec_str: Second string
+ * Return: -1 if fails, 1 if the same
  */
-void handle_built_in(char **argv)
+int _strcmp(char *first_str, char *sec_str)
 {
-	built_in_t built_in_vals[] = {
-		{"exit", _exit_func},
-		{"env", _env_func},
-		{"setenv", _setenv},
-		{"unsetenv", _unsetenv},
-		{"cd", _cd},
-		{"echo", _echo},
-		{NULL, NULL}
-	};
-	unsigned int i = 0;
+	int n;
+	int j;
 
-	while (built_in_vals[i].name)
+	for (n = 0, j = 0; (first_str[n] != '\0' || sec_str[n] != '\0'); n++)
 	{
-		if (_strcmp(built_in_vals[i].name, argv[0]))
-		{
-			built_in_vals[i].f(argv);
+		j = first_str[n] - sec_str[n];
+		if (j != 0)
 			break;
-		}
-		i++;
 	}
+
+	if (j < 0)
+		return (-1);
+	else if (j > 0)
+		return (1);
+
+	return (j);
 }
 
 /**
- * extract_term_args - Extract term args from stdin
- * @stdin_bfr: Buffer containing strings from stdin
- * Return: String of strings containing term args
+ * _strdup - Clones a string
+ * @s: String to clone
+ * Return: Cloned string
  */
-
-char **extract_term_args(char *stdin_bfr)
+char *_strdup(char *s)
 {
-	char *str;
-	char *lead_path;
-	char **ret_bfr = NULL;
+	char *dup;
+	size_t len;
 
-	if (stdin_bfr[0] == '\n' || is_space_only(stdin_bfr))
+	len = _strlen(s);
+	dup = malloc(sizeof(char) * (len + 1));
+	if (dup == NULL)
 		return (NULL);
-	str = malloc((_strlen(stdin_bfr) + 1) * sizeof(char));
-	if (str == NULL)
-		return (NULL);
-	_strcpy_n_o(stdin_bfr, str);
-	ret_bfr = _strtok(strip_spaces(str), " ");
-	lead_path = first_arg_handler(ret_bfr);
-	if (lead_path == NULL)
-		return (NULL);
-	ret_bfr[0] = realloc(ret_bfr[0], _strlen(lead_path) * sizeof(char));
-	_strcpy_n_o(lead_path, ret_bfr[0]);
-	free(str);
-	return (ret_bfr);
+	_dataclone(dup, s, len + 1);
+	return (dup);
 }
+

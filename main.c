@@ -1,115 +1,211 @@
 #include "shell.h"
 
 /**
- * child_call - Calls the child process for simple shell
- * @argv: Array of arg path and possibly options
+ * handle_builtin - Handles built in commands
+ * @arr: Assembly of shell commands
+ * Return: Function linked with appropriate builtin comand
+ */
+int (*handle_builtin(char **arr))(inp_typ *)
+{
+	built_in shell_map[] = {
+		{"exit", _custexit},
+		{"env", _custenv},
+		{"setenv", _set},
+		{"unsetenv", _unset},
+		{"cd", _cd},
+		{NULL, NULL}
+	};
+
+	int i = 0;
+
+	if (arr != NULL)
+	{
+		while (shell_map[i].func != NULL)
+		{
+			if (_strcmp(shell_map[i].str, arr[0]) == 0)
+			{
+				return (shell_map[i].func);
+			}
+			else
+				i++;
+		}
+	}
+
+	return (NULL);
+}
+
+/**
+ * isnotatty - Working with the non interactive shell
+ * @inp_struct: Shell data input
  * Return: Nothing
  */
-void child_call(char **argv)
+void isnotatty(inp_typ *inp_struct)
 {
-	pid_t pid;
+	char *path;
 
-	pid = fork();
-	if (pid == -1)
+	inp_struct->interact = 0;
+	for (; ;)
 	{
-		exit(1);
-	}
-	if (pid == 0)
-	{
-		if (execve(argv[0], argv, environ) == -1)
+		path = parse_cmd(inp_struct);
+		if (!path && inp_struct->builtin == 0)
+			_custexit(inp_struct);
+		else if (!path && inp_struct->builtin == 1)
+			continue;
+
+		inp_struct->builtin = 0;
+		inp_struct->pid = fork();
+		if (inp_struct->pid == 0)
 		{
-			perror("Exec failure");
-			free_mult(argv);
-			exit(1);
+			inp_struct->status = execve(path, inp_struct->arr, inp_struct->_env);
+			if (inp_struct->status == -1)
+			{
+				write(STDERR_FILENO, inp_struct->av[0], _strlen(inp_struct->av[0]));
+				write(STDERR_FILENO, ": ", 2);
+				write(STDERR_FILENO, inp_struct->arr[0], _strlen(inp_struct->av[0]));
+				write(STDERR_FILENO, ": Permission denied\n", 20);
+				free(path);
+				inp_struct->status = 13;
+				_custexit(inp_struct);
+			}
 		}
-		free_mult(argv);
+		else
+		{
+			wait(&inp_struct->status);
+			inp_struct->status = WEXITSTATUS(inp_struct->status);
+		}
+		free_arr_o_arr(inp_struct->arr);
+		free(path);
 	}
+}
+
+/**
+ * shell_core - Loops the interactive shell
+ * @in_st: Shell input data
+ * Return: Nothing
+ */
+void shell_core(inp_typ *in_st)
+{
+	char *path;
+
+	if (in_st->av[1])
+		exit(98);
+	else if (!isatty(STDIN_FILENO))
+		isnotatty(in_st);
 	else
 	{
-		wait(NULL);
+		for (; ;)
+		{
+			write(STDOUT_FILENO, "($) ", 4);
+			fflush(stdout);
+			path = parse_cmd(in_st);
+			if (!path)
+				continue;
+			in_st->pid = fork();
+			if (in_st->pid == 0)
+			{
+				in_st->status = execve(path, in_st->arr, in_st->_env);
+				if (in_st->status == -1)
+				{
+					write(STDERR_FILENO, in_st->av[0], _strlen(in_st->av[0]));
+					write(STDERR_FILENO, ": ", 2);
+					write(STDERR_FILENO, in_st->arr[0], _strlen(in_st->arr[0]));
+					write(STDERR_FILENO, ": Permission denied\n", 20);
+					free(path);
+					in_st->status = 13;
+					_custexit(in_st);
+				}
+			}
+			else
+			{
+				wait(&in_st->status);
+				in_st->status = WEXITSTATUS(in_st->status);
+			}
+			free_arr_o_arr(in_st->arr);
+			free(path);
+		}
 	}
 }
 
 /**
- * control_center - Processes the buffer from stdin and decides what to do
- * @buffer: Buffer from stdin
- * Return: 0 on failure, 1 if it works
+ * parse_cmd - Parses shell commands
+ * @in_sh: Shell data structure
+ * Return: Path to executable
  */
-int control_center(char *buffer)
+char *parse_cmd(inp_typ *in_sh)
 {
-	char **argv = extract_term_args(buffer);
+	int (*native_f)(inp_typ *in_sh);
+	char *path;
 
-	if (argv == NULL)
-		return (0);
-	child_call(argv);
-	return (1);
-}
-
-/**
- * mult_cmd - Handles multiple commands delimited by a ;
- * @buffer: Buffer from stdin
- * @symbol: Delimiting symbol
- * Return: Nothing
- */
-void mult_cmd(char *buffer, char *symbol)
-{
-	char **cmds = _strtok(buffer, symbol);
-
-	while (*cmds)
+	in_sh->arr = _readcmd(in_sh, in_sh->line, in_sh->length);
+	if (!in_sh->arr)
 	{
-		control_center(*cmds);
-		cmds++;
+		free(in_sh->line);
+		return (NULL);
 	}
-}
+	expansion(in_sh);
+	native_f = handle_builtin(in_sh->arr);
 
-/**
- * shell_core - The core function for the simple shell project
- * Return: Nothing
- */
-void shell_core(void)
-{
-	char *buffer;
-
-	while (1)
+	if (native_f != NULL)
 	{
-		buffer = malloc(1024 * sizeof(char));
-		if (buffer == NULL)
-			exit(1);
-		if (isatty(STDIN_FILENO))
-			_putstr("$ ", 1);
-		fflush(stdout);
-		if (read(STDIN_FILENO, buffer, 1024) < 1)
-		{
-			exit(0);
-		}
-		if (_strincludes(buffer, ';'))
-		{
-			mult_cmd(buffer, " ; ");
-			continue;
-		}
-		if (_strlen(buffer) > 1 && _strincludesstr(buffer, "&&"))
-		{
-			mult_cmd(buffer, " && ");
-			continue;
-		}
-		if (mid_newline(buffer))
-		{
-			mult_cmd(buffer, "\n");
-			continue;
-		}
-		if (!control_center(buffer))
-			continue;
-		free(buffer);
+		in_sh->status = native_f(in_sh);
+		if (in_sh->arr != NULL)
+			free_arr_o_arr(in_sh->arr);
+		in_sh->builtin = 1;
+		return (NULL);
 	}
+	path = scan_paths(in_sh->path, in_sh->arr[0]);
+
+	if (!path)
+	{
+		write(STDERR_FILENO, in_sh->av[0], _strlen(in_sh->av[0]));
+		write(STDERR_FILENO, ": ", 2);
+		write(STDERR_FILENO, in_sh->arr[0], _strlen(in_sh->arr[0]));
+		write(STDERR_FILENO, ": No such file or directory\n", 28);
+		in_sh->status = 2;
+		free_arr_o_arr(in_sh->arr);
+		free(path);
+		return (NULL);
+	}
+	return (path);
 }
 
 /**
- * main - The main calling function for the simple shell project
- * Return: Nothing
+ * main - Main function
+ * @ac: Number of arguments
+ * @av: Array of args
+ * @env: Env variables
+ *
+ * Return: 0 at successful exit
  */
-int main(void)
+int main(int ac, char *av[], char *env[])
 {
-	shell_core();
+	inp_typ in_st;
+	int j;
+
+	in_st.line = NULL;
+	in_st.length = 0;
+	in_st.interact = 1;
+	in_st.pid = getpid();
+	in_st.status = 0;
+	in_st.builtin = 0;
+	in_st.arr = NULL;
+	(void) env;
+
+	in_st.av = malloc(sizeof(char *) * (ac + 1));
+	for (j = 0; av[j]; j++)
+		in_st.av[j] = _strdup(av[0]);
+	in_st.av[j] = NULL;
+	for (j = 0; environ[j]; j++)
+		;
+
+	in_st._env = malloc(sizeof(char *) * (j + 1));
+	for (j = 0; environ[j]; j++)
+		in_st._env[j] = _strdup(environ[j]);
+	in_st._env[j] = NULL;
+
+	in_st.path = serialize_path(&in_st);
+
+	shell_core(&in_st);
+
 	return (0);
 }
-

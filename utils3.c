@@ -1,108 +1,144 @@
 #include "shell.h"
 
 /**
- * free_mult - Frees a collection of allocated memory spaces
- * @argv: Pointer to memory block to be freed
+ * free_list - Free memory allocated to path holder
+ * @head: List head
  * Return: Nothing
  */
-void free_mult(char **argv)
+void free_list(path_typ *head)
 {
-	char **tmp = argv;
+	path_typ *tmp = head;
+	path_typ *sec;
 
-	if (!argv)
-		return;
-	while (*argv)
+	if (head)
 	{
-		free(*argv);
-		argv++;
-	}
-	free(tmp);
-}
-
-/**
- * allocator - Allocates space for strings
- * Return: Allocated memory
- */
-char *allocator(void)
-{
-	char *ret_val = malloc(1024 * sizeof(char));
-
-	if (!ret_val)
-		exit(1);
-	return (ret_val);
-}
-
-/**
- * sp - Checks if a vlue is space
- * @chr: Char to check
- * Return: 1 or 0 depending on success
- */
-int sp(char chr)
-{
-	return (chr == ' ');
-}
-
-/**
- * is_space_only - Filter out collection of spaces
- * @str: String to check if input is a collection of spaces
- * Return: 1 if just spaces, 0 0therwise
-*/
-int is_space_only(char *str)
-{
-	char *space_str = " ";
-	unsigned int len = _strlen(str);
-	unsigned int i = 0;
-
-	if (_strcmp(str, space_str))
-		return (1);
-	while (i < len)
-	{
-		if (str[i] != ' ')
-			return (0);
-		i++;
-	}
-	return (1);
-}
-/**
- * strip_spaces - Remove spaces from the stdin buffer
- * @str: Input buffer
- * Return: Pointer to space stripped string
- */
-char *strip_spaces(char *str)
-{
-	char *str_bfr = allocator();
-	unsigned int nbidx = 0;
-	unsigned int bfr_len = _strlen(str);
-	unsigned int i = 0;
-
-	while (i < bfr_len)
-	{
-		if (sp(str[i]))
+		while (tmp->next)
 		{
-			while (sp(str[i]) && i < bfr_len)
-			{
-				if (i == bfr_len - 1)
-				{
-					i++;
-					break;
-				}
-				if (!sp(str[i + 1]))
-				{
-					space_end(&nbidx, &i, str_bfr, str);
-					break;
-				}
-				i++;
-			}
+			sec = tmp;
+			tmp = tmp->next;
+			free(sec->s);
+			free(sec);
 		}
-		else
-		{
-			str_bfr[nbidx] = str[i];
-			nbidx++;
-			i++;
-		}
+
+		free(tmp->s);
+		free(tmp);
 	}
-	str_bfr[_strlen(str_bfr)] = '\0';
-	return (str_bfr);
 }
 
+/**
+ * free_arr_o_arr - Free space allocated to an array of arrays
+ * @bfr: Array of arrays
+ * Return: Nothing
+ */
+void free_arr_o_arr(char **bfr)
+{
+	int i;
 
+	if (bfr != NULL)
+	{
+		for (i = 0; bfr[i] ; i++)
+			free(bfr[i]);
+		free(bfr);
+	}
+}
+
+/**
+ * _atoi - Cast string to integer
+ * @str: String to convert
+ * Return: Converted int
+ */
+int _atoi(char *str)
+{
+	unsigned int count = 0, size = 0;
+	unsigned int io = 0, np = 1, m = 1, i;
+
+	while (str[count] != '\0')
+	{
+		if (size > 0 && (str[count] < '0' || str[count] > '9'))
+			break;
+
+		if (str[count] == '-')
+			np *= -1;
+
+		if ((str[count] >= '0') && (str[count] <= '9'))
+		{
+			if (size > 0)
+				m *= 10;
+			size++;
+		}
+		count++;
+	}
+
+	for (i = count - size; i < count; i++)
+	{
+		io = io + ((str[i] - 48) * m);
+		m /= 10;
+	}
+	return (io * np);
+}
+
+/**
+ * _itoa - Cast integer to string
+ * @i: type int number
+ * Return: String.
+ */
+char *_itoa(int i)
+{
+	unsigned int n;
+	int len = num_len(i);
+	char *bfr;
+
+	bfr = malloc(sizeof(char) * (len + 1));
+	if (bfr == 0)
+		return (NULL);
+
+	bfr[len] = '\0';
+
+	if (i < 0)
+	{
+		n = i * -1;
+		bfr[0] = '-';
+	}
+	else
+	{
+		n = i;
+	}
+
+	len--;
+	do {
+		bfr[len] = (n % 10) + '0';
+		n = n / 10;
+		len--;
+	}
+	while (n > 0)
+		;
+	return (bfr);
+}
+
+/**
+ * num_len - Calculate the length of an int
+ * @i: Number to check
+ * Return: Number length
+ */
+int num_len(int i)
+{
+	unsigned int n;
+	int len = 1;
+
+	if (i < 0)
+	{
+		len++;
+		n = i * -1;
+	}
+	else
+	{
+		n = i;
+	}
+	while (n > 9)
+	{
+		len++;
+		n = n / 10;
+	}
+
+	return (len);
+}

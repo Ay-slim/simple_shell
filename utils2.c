@@ -1,138 +1,124 @@
 #include "shell.h"
 
 /**
- * _is_digit - Function to check if a character is digit
- * @c: Char to test
- * Return: 1 if digit 0 otherwise
+ * _strincludes - Checks if a string includes a character
+ * @str: String to check
+ * @c: Character to search
+ * @len: String length
+ * Return: Nothing
  */
-
-int _is_digit(char c)
+void *_strincludes(const void *str, int c, size_t len)
 {
-	int diff = c - '0';
+	const unsigned char *tmp = (const unsigned char *)str;
 
-	return (diff >= 0 && diff < 10);
-}
-/**
- * _atoi - Function to return integer within a string
- * @s: Source string
- * Return: The integer within the string
- */
-
-int _atoi(char *s)
-{
-	float place_value;
-	float sum;
-	float multiplier;
-	int length;
-	int i = 0;
-	int sign;
-
-	place_value = 1;
-	sum = 0;
-	sign = 1;
-	length = _strlen(s);
-	multiplier = 0.1;
-	while (i < length)
+	while (len-- > 0)
 	{
-		if (s[i] == '-' && _is_digit(s[i + 1]))
+		if (*tmp == c)
+			return ((void *)tmp);
+		tmp++;
+	}
+	return (NULL);
+}
+
+/**
+ * _strtok - String tokenization by delimiter
+ * @str: String to tokenize
+ * @delim: Delimiter
+ * Return: Tokenized string
+ */
+char *_strtok(char *str, const char *delim)
+{
+	static char *s;
+	char *ret_val = NULL;
+
+	if (str != NULL)
+	{
+		s = str;
+	}
+	if (s != NULL && _strlen(s))
+	{
+		const size_t len = _strlen((char *)delim);
+
+		while (*s && _strincludes(delim, *s, len) != NULL)
 		{
-			sign = -1;
+			++s;
 		}
-		if (_is_digit(s[i]))
+		if (*s)
 		{
-			sum += ((s[i] - '0') * place_value);
-			place_value /= 10;
-			multiplier *= 10;
-			if (!_is_digit(s[i + 1]))
+			ret_val = s;
+			while (*s)
 			{
-				break;
+				if (_strincludes(delim, *s, len) != NULL)
+				{
+					break;
+				}
+				else
+					++s;
+			}
+			if (*s)
+			{
+				s[0] = 0;
+				++s;
 			}
 		}
-		i++;
 	}
-	return ((int)(sum * sign * multiplier));
+	return (ret_val);
 }
 
 /**
- * first_arg_handler - Handles first arg
- * @ret_bfr: Return buffer from calling function
- * Return: Lead path or null
+ * _dataclone - Clones data from one memory location to the other
+ * @sink: Data destination
+ * @src: Data origin
+ * @len: Data size
+ * Return: Nothing
  */
-char *first_arg_handler(char **ret_bfr)
+void _dataclone(void *sink, const void *src, unsigned int len)
 {
-	if (built_in_check(ret_bfr[0]))
+	char *ptr = (char *)src;
+	char *tmp = (char *)sink;
+	unsigned int i;
+
+	for (i = 0; i < len; i++)
+		tmp[i] = ptr[i];
+}
+
+/**
+ * _realloc - Custom memory reallocation
+ * @mem: Previous memory location
+ * @prev_len: Previous memory length
+ * @new_len: New length
+ * Return: New memory pointer
+ */
+void *_realloc(void *mem, unsigned int prev_len, unsigned int new_len)
+{
+	char *tmp;
+	unsigned int i;
+
+	if (new_len == prev_len)
+		return (mem);
+
+	if (mem == NULL)
 	{
-		handle_built_in(ret_bfr);
+		mem = malloc(new_len);
+		return (mem);
+	}
+
+	if (new_len == 0 && mem != NULL)
+	{
+		free(mem);
 		return (NULL);
 	}
-	return (handle_path(ret_bfr[0]));
+
+	tmp = malloc(new_len);
+	if (tmp == NULL)
+		return (NULL);
+
+	for (i = 0; i < new_len && i < prev_len; i++)
+		;
+
+	_dataclone(tmp, mem, i);
+	free(mem);
+
+	return (tmp);
 }
-
-/**
- * _strtok - Strtok implementation
- * @bfr: String to split up
- * @delim: Delimiter
- * Return: An array of strings separated by the delimiter
- */
-char **_strtok(char *bfr, char *delim)
-{
-	char **argv;
-	unsigned int i = 0;
-	unsigned int j = 0;
-	unsigned int b_len = _strlen(bfr);
-	unsigned int d_len = _strlen(delim);
-	unsigned int k = 0;
-	int cmp = 0;
-
-	argv = malloc(100 * sizeof(char));
-	if (!argv)
-		exit(1);
-	argv[0] = malloc(100 * sizeof(char));
-	if (!argv[0])
-		exit(1);
-	while (k < b_len)
-	{
-		cmp = _strcmp(_substr(bfr, k, k + d_len), delim);
-		if ((k == 0 || k == (b_len - d_len)) && cmp)
-		{
-			k++;
-			continue;
-		}
-		if (cmp)
-		{
-			argv[i][j] = '\0';
-			j = 0;
-			i++;
-			k += d_len;
-			argv[i] = malloc(100 * sizeof(char));
-			if (!argv[i])
-				exit(1);
-			continue;
-		}
-		argv[i][j] = bfr[k];
-		j++;
-		k++;
-	}
-	argv[i + 1] = NULL;
-	return (argv);
-}
-
-/**
- * _strarrlen - Returns the length of an array of strings
- * @arr: Array of strings
- * Return: Length of array
- */
-unsigned int _strarrlen(char **arr)
-{
-	char **temp = arr;
-	unsigned int i = 0;
-
-	while (*temp)
-	{
-		i++;
-		temp++;
-	}
-	return (i);
-}
-
 

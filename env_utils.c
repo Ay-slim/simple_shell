@@ -1,138 +1,173 @@
 #include "shell.h"
 
 /**
- * name_val - Returns index of name being sought
- * @env: Current env string
- * @name_len: Length of env name
- * Return: Env value
+ * expansion - Destructures arguments
+ * @inp_struct: Shell command data
+ * Return: void
  */
-char *name_val(char *env, unsigned int name_len)
+void expansion(inp_typ *inp_struct)
 {
-	unsigned int i = 0;
-	unsigned int val_len = _strlen(env) - name_len;
-	char *ret_val;
+	int i, j, k;
+	char *str, *value;
 
-	ret_val = malloc(val_len * sizeof(char));
-	if (!ret_val)
-		return (NULL);
-	while (i < val_len - 1)
+	for (i = 0; inp_struct->arr[i]; i++)
 	{
-		ret_val[i] = (env)[i + name_len + 1];
-		i++;
-	}
-	ret_val[val_len - 1] = '\0';
-	return (ret_val);
-}
-
-/**
- * _genv_max - Returns a struct with env length, index, and value
- * @var_name: Name of env value to check
- * Return: Env_typ_t value with length, index, and value
- */
-env_typ_t _genv_max(char *var_name)
-{
-	unsigned int j = 0;
-	unsigned int len = 0;
-	unsigned int name_len = _strlen(var_name);
-	unsigned int idx = 0;
-	char *env_val = NULL;
-	char **env = environ;
-	env_typ_t env_deets;
-
-	while (*env)
-	{
-		j = 0;
-		while (!idx && (j < name_len))
+		if (_strcmp(inp_struct->arr[i], "$$") == 0)
 		{
-			if (j == name_len - 1 && var_name[j] == (*env)[j])
+			free(inp_struct->arr[i]);
+			str = _itoa(inp_struct->pid);
+			inp_struct->arr[i] = _strdup(str);
+			free(str);
+		}
+		else if (_strcmp(inp_struct->arr[i], "$?") == 0)
+		{
+			free(inp_struct->arr[i]);
+			str = _itoa(inp_struct->status);
+			inp_struct->arr[i] = _strdup(str);
+			free(str);
+		}
+		else if (inp_struct->arr[i][0] == '$')
+		{
+			str = malloc(sizeof(char) * _strlen(inp_struct->arr[i]));
+			for (j = 1, k = 0; inp_struct->arr[i][j]; j++, k++)
+				str[k] = inp_struct->arr[i][j];
+			str[k] = '\0';
+			value = _getenv(inp_struct, str);
+			if (value == NULL)
 			{
-				idx = len;
-				env_val = name_val(*env, name_len);
-				break;
+				free(value);
+				free(str);
 			}
-			if (var_name[j] != (*env)[j])
-				break;
+			else
+			{
+				free(inp_struct->arr[i]);
+				free(str);
+				inp_struct->arr[i] = _strdup(value);
+				free(value);
+			}
+		}
+	}
+}
+
+/**
+ * push_path_node - Appends a new node to a path list
+ * @head: Path pointer
+ * @str: String to appen
+ * Return: New list address
+ */
+path_typ *push_path_node(path_typ **head, char *str)
+{
+	path_typ *paths, *tmp;
+
+	tmp = *head;
+	paths = malloc(sizeof(path_typ));
+
+	if (!paths)
+		return (NULL);
+
+	paths->s = _strdup(str);
+	paths->next = NULL;
+
+	if (!tmp)
+	{
+		*head = paths;
+	}
+	else
+	{
+		while (tmp->next)
+			tmp = tmp->next;
+		tmp->next = paths;
+	}
+
+	return (*head);
+}
+
+/**
+ * serialize_path - serialize paths in path env var
+ * @inp_struct: shell data
+ * Return: path env var
+ */
+path_typ *serialize_path(inp_typ *inp_struct)
+{
+	char path[5] = "PATH";
+	int i, j, k, check;
+	path_typ *head = NULL;
+	char *str;
+
+	for (i = 0; inp_struct->_env[i]; i++)
+	{
+		j = 0, check = 0;
+		while (inp_struct->_env[i][j] != '=' && path[j] != '\0')
+		{
+			if (inp_struct->_env[i][j] != path[j])
+				check = 1;
 			j++;
+		} k = 0;
+		if (check == 0)
+		{
+			j++;
+			while (inp_struct->_env[i][j])
+			{
+				if (inp_struct->_env[i][j] == ':')
+				{
+					str[k] = '\0', k = 0;
+					push_path_node(&head, str);
+					free(str);
+				}
+				else
+				{
+					if (k == 0)
+						str = malloc(sizeof(char) * 150);
+					str[k] = inp_struct->_env[i][j], k++;
+				} j++;
+			} str[k] = '\0';
+			push_path_node(&head, str);
+			free(str);
+			break;
 		}
-		env++;
-		len++;
-	}
-	env_deets.val = env_val;
-	env_deets.idx = idx;
-	env_deets.len = len;
-	return (env_deets);
+	} str = _getenv(inp_struct, "PWD");
+	push_path_node(&head, str);
+	free(str);
+	return (head);
 }
 
 /**
- * _setenv_old - Set an already existing env var
- * @name: Name of variable to set
- * @len: Environ length
- * @idx: Index to set
- * @val: Value to set
- * Return: Void
+ * scan_paths - Scan for executable
+ * @path_l: Path data
+ * @fd: File to scan
+ * Return: Full path name
  */
-void _setenv_old(char *name, unsigned int len, unsigned int idx, char *val)
+char *scan_paths(path_typ *path_l, char *fd)
 {
-	char *val_to_add = _pathconcat(name, '=', val);
-	char **env = malloc((len + 1) * sizeof(char *));
-	unsigned int i = 0;
-	unsigned int j;
-	unsigned int k;
+	path_typ *tmp = path_l;
+	char *path;
+	struct stat s;
 
-	if (!env)
-		exit(1);
-	while (i < len)
+	while (tmp)
 	{
-		if (i == idx)
+		path = malloc(sizeof(char) * (_strlen(tmp->s) + _strlen(fd) + 2));
+
+		if (fd[0] == '/')
 		{
-			j = _strlen(val_to_add);
-			env[i] = malloc((j + 1) * sizeof(char));
-			if (!env[i])
-				exit(1);
-			_strcpy(val_to_add, env[i]);
+			free(path);
+			if (stat(fd, &s) == 0)
+			{
+				path = _strdup(fd);
+				return (path);
+			}
+			else
+				return (NULL);
 		}
-		else
-		{
-			k = _strlen(environ[i]);
-			env[i] = malloc((k + 1) * sizeof(char));
-			if (!env[i])
-				exit(1);
-			_strcpy(environ[i], env[i]);
-		}
-		i++;
+
+		_strcpy(path, tmp->s);
+		_strcat(path, "/");
+		_strcat(path, fd);
+		if (stat(path, &s) == 0)
+			return (path);
+
+		free(path);
+		tmp = tmp->next;
 	}
-	env[len] = NULL;
-	environ = env;
+
+	return (NULL);
 }
-
-/**
- * _setenv_new - Set a new env var
- * @name: Name of variable to set
- * @len: Environ length
- * @val: Value to set
- * Return: Void
- */
-void _setenv_new(char *name, unsigned int len, char *val)
-{
-	char *val_to_add = _pathconcat(name, '=', val);
-	char **env = malloc((len + 1) * sizeof(char *));
-	unsigned int i = 0;
-
-	if (!env)
-		exit(1);
-	while ((i < len) && environ[i])
-	{
-		env[i] = malloc((_strlen(environ[i]) + 1) * sizeof(char));
-		if (!env[i])
-			exit(1);
-		_strcpy(environ[i], env[i]);
-		i++;
-	}
-	env[len] = malloc((_strlen(val_to_add) + 1) * sizeof(char));
-	if (!env[len])
-		exit(1);
-	_strcpy(val_to_add, env[len]);
-	env[len + 1] = NULL;
-	environ = env;
-}
-
